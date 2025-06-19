@@ -157,7 +157,7 @@ def main(bam_list, output, genome, kmer, mapq,
     with open(output, "w") as fh:
         fh.write("bam\tpct_chrX\tpct_chrY\n")
         for bam, x, y in results:
-            fh.write(f"{bam}\t{x:.4f}\t{y:.4f}\n")
+            fh.write(f"{bam}\t{x:.2f}\t{y:.2f}\n")
     console.print(f"[cyan]Report written:[/] {output}")
 
     # pretty table
@@ -166,7 +166,7 @@ def main(bam_list, output, genome, kmer, mapq,
     tbl.add_column("%X", justify="right")
     tbl.add_column("%Y", justify="right")
     for bam, x, y in results:
-        tbl.add_row(bam, f"{x:.4f}", f"{y:.4f}")
+        tbl.add_row(bam, f"{x:.2f}", f"{y:.2f}")
     console.print(tbl)
 
     # cleanup pybedtools scratch
