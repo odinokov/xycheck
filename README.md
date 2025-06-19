@@ -20,6 +20,21 @@ python ycheck.py -b bam_list.txt -g hg38 -t 4 -T .
 2. Builds clean chrX/chrY BED (once).
 3. For each BAM outputs %X, %Y.
 
+```txt
+python ycheck.py -b bam_list.lst -g hg38 -t 4
+samtools -@ 4 | TMP /tmp
+Genome: hg38
+
+Mappable bp → chrX:142,677,523  chrY:15,440,765
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ counting BAMs 0:00:01
+Report written: bam_list.XY.tsv
+                               chrX/chrY fragment %  (MAPQ≥60, -I 3, -F 3852)
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━┓
+┃ BAM                                                                                      ┃    %X ┃    %Y ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━┩
+│ /sample.sorted.bam                                                                       │ 50.00 │ 50.00 │
+└──────────────────────────────────────────────────────────────────────────────────────────┴───────┴───────┘
+```
 
 **If you use it, please cite:**
 
