@@ -110,8 +110,8 @@ def pct_xy(bam, bed, mapq, f_inc, f_exc, threads, lenX: int, lenY: int):
 @click.option("-g","--genome", type=click.Choice(["hg19","hg38"]))
 @click.option("-k","--kmer", default=100, show_default=True)
 @click.option("-q","--mapq", default=60, show_default=True)
-@click.option("-I","--include-flag", default=3, show_default=True)
-@click.option("-E","--exclude-flag", default=3852, show_default=True)
+@click.option("-f","--include-flag", default=3, show_default=True)
+@click.option("-F","--exclude-flag", default=3852, show_default=True)
 @click.option("-t","--threads", default=min(8, os.cpu_count()), show_default="all cores")
 @click.option("-T","--tmp-dir", default=tempfile.gettempdir(), show_default=True,
               type=click.Path(file_okay=False, writable=True))
