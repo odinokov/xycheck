@@ -177,7 +177,7 @@ def main(bam_list, output, genome, kmer, mapq,
     console.print(f"[cyan]Report written:[/] {output}")
 
     # pretty table
-    tbl = Table(title=f"chrX/chrY fragment %  (MAPQ≥{mapq}, -I {include_flag}, -F {exclude_flag})")
+    tbl = Table(title=f"chrX/chrY fragment %  (MAPQ≥{mapq}, -I {include_flag}, -E {exclude_flag})")
     tbl.add_column("BAM", overflow="fold")
     tbl.add_column("%X", justify="right")
     tbl.add_column("%Y", justify="right")
