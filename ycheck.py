@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# ycheck.py  v1.4  (2025-06-19)
+# ycheck.py  v1.5  (2025-06-19)
 #
 # MIT License
 #
 # Counts MAPQ-filtered, properly-paired reads on chrX and chrY for each BAM/CRAM.
 # ▸ Caches Umap single-read mappability + ENCODE blacklist (hg19/hg38)
 # ▸ Builds a merged, non-overlapping chrX/chrY BED  →  clean_XY.<genome>.bed
+# ▸ Normalises counts by total mappable bp per chromosome before computing %
 # ▸ Processes BAMs sequentially; `-t / --threads` → samtools -@ for fast BGZF
 # ▸ Writes <list>.XY.tsv unless -o is given, plus a rich console table.
 #
@@ -26,6 +27,7 @@ BL_URL   = "https://raw.githubusercontent.com/Boyle-Lab/Blacklist/master/lists/{
 DATA_DIR = pathlib.Path("data")
 
 # ── helpers ────────────────────────────────────────────────────────────────
+
 def fetch(url: str, dest: pathlib.Path, prog: Progress) -> pathlib.Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and dest.stat().st_size:
@@ -80,19 +82,26 @@ def build_clean_track(asm: str, kmer: int, prog: Progress) -> pathlib.Path:
     logging.info(f"{out_path.name} cached")
     return out_path
 
-def pct_xy(bam, bed, mapq, f_inc, f_exc, threads):
-    # counts in clean XY intervals
+def pct_xy(bam, bed, mapq, f_inc, f_exc, threads, lenX: int, lenY: int):
+    """Return (pctX, pctY) where percentages are density‑normalised by
+    total mappable bp for each chromosome."""
     xy_base = (f"samtools view -c -q {mapq} -f {f_inc} -F {f_exc} "
                f"-@ {threads} -L {shlex.quote(str(bed))} {shlex.quote(bam)}")
     cntX = int(subprocess.check_output(xy_base + " chrX", shell=True).strip())
     cntY = int(subprocess.check_output(xy_base + " chrY", shell=True).strip())
-    
-    if not cntX or not cntY:
-        return (None, None)
-    
-    total = cntX + cntY
 
-    return (round(cntX * 100 / total, 2), round(cntY * 100 / total, 2))
+    if (cntX + cntY) == 0:
+        return (None, None)
+
+    normX = cntX / lenX if lenX else 0
+    normY = cntY / lenY if lenY else 0
+    total = normX + normY
+    if total == 0:
+        return (None, None)
+
+    pctX = round(100 * normX / total, 2)
+    pctY = round(100 - pctX, 2)
+    return (pctX, pctY)
 
 # ── CLI ────────────────────────────────────────────────────────────────────
 @click.command()
@@ -107,6 +116,7 @@ def pct_xy(bam, bed, mapq, f_inc, f_exc, threads):
 @click.option("-T","--tmp-dir", default=tempfile.gettempdir(), show_default=True,
               type=click.Path(file_okay=False, writable=True))
 @click.option("-v","--verbose", is_flag=True)
+
 def main(bam_list, output, genome, kmer, mapq,
          include_flag, exclude_flag, threads, tmp_dir, verbose):
 
@@ -143,13 +153,19 @@ def main(bam_list, output, genome, kmer, mapq,
                   TimeElapsedColumn(), transient=True) as dl:
         bed_path = build_clean_track(genome, kmer, dl)
 
+    # step 1b: pre‑compute mappable bp lengths
+    bed = pybedtools.BedTool(bed_path)
+    lenX = sum(iv.length for iv in bed if iv.chrom == "chrX")
+    lenY = sum(iv.length for iv in bed if iv.chrom == "chrY")
+    console.print(f"[blue]Mappable bp → chrX:{lenX:,}  chrY:{lenY:,}[/]")
+
     # step 2: sequential counting
     results = []
     with Progress(SpinnerColumn(), BarColumn(), TextColumn("counting BAMs"),
                   TimeElapsedColumn()) as bar:
         task = bar.add_task("counting BAMs", total=len(bam_paths))
         for bam in bam_paths:
-            x, y = pct_xy(bam, bed_path, mapq, include_flag, exclude_flag, threads)
+            x, y = pct_xy(bam, bed_path, mapq, include_flag, exclude_flag, threads, lenX, lenY)
             results.append((bam, x, y))
             bar.update(task, advance=1)
 
