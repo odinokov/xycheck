@@ -1,5 +1,5 @@
 # ycheck
-Count chrX / chrY fragments in BAMs
+Counts chrX / chrY fragments in one or many BAM/CRAM files and reports the length‑normalised percentage for each chromosome.
 
 ```
 python ycheck.py -b bam_list.txt -g hg38 -t 4 -T .
