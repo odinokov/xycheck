@@ -86,6 +86,10 @@ def pct_xy(bam, bed, mapq, f_inc, f_exc, threads):
                f"-@ {threads} -L {shlex.quote(str(bed))} {shlex.quote(bam)}")
     cntX = int(subprocess.check_output(xy_base + " chrX", shell=True).strip())
     cntY = int(subprocess.check_output(xy_base + " chrY", shell=True).strip())
+    
+    if not cntX or not cntY:
+        return (0.0, 0.0)
+    
     total = cntX + cntY
 
     return (round(cntX * 100 / total, 4), round(cntY * 100 / total, 4))
