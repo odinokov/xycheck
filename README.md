@@ -11,7 +11,7 @@ python ycheck.py -b bam_list.txt -g hg38 -t 4 -T .
 | `-g/--genome`       | **required**  | hg19 / hg38                        |
 | `-o/--output`       | <list>.XY.tsv | TSV report path                    |
 | `-t/--threads`      | all cores     | passed to `samtools -@`            |
-| `-k` `-q` `-I` `-E` | 100 60 3 3852 | umap, MAPQ, FLAG filters           |
+| `-k` `-q` `-I` `-E` | 100 60 3 3852 | umap K-mers, MAPQ, FLAG filters    |
 | `-T`                | \$TMPDIR      | temp dir                           |
 
 **What it does**
