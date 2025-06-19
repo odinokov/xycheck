@@ -2,7 +2,7 @@
 Counts chrX / chrY fragments in BAM/CRAM files and reports the length‑normalised percentage for each chromosome.
 
 ```
-python ycheck.py -b bam_list.txt -g hg38 -t 4 -T .
+python ycheck.py -b bam_list.txt -g hg38 -t 4
 ```
 
 | flag                | default       | note                               |
