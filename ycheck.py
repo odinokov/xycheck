@@ -81,18 +81,12 @@ def build_clean_track(asm: str, kmer: int, prog: Progress) -> pathlib.Path:
     return out_path
 
 def pct_xy(bam, bed, mapq, f_inc, f_exc, threads):
-    # genome-wide total
-    base = (f"samtools view -c -q {mapq} -f {f_inc} -F {f_exc} "
-            f"-@ {threads} {shlex.quote(bam)}")
-    total = int(subprocess.check_output(base, shell=True).strip())
-    if not total:
-        return (0.0, 0.0)
-
     # counts in clean XY intervals
     xy_base = (f"samtools view -c -q {mapq} -f {f_inc} -F {f_exc} "
                f"-@ {threads} -L {shlex.quote(str(bed))} {shlex.quote(bam)}")
     cntX = int(subprocess.check_output(xy_base + " chrX", shell=True).strip())
     cntY = int(subprocess.check_output(xy_base + " chrY", shell=True).strip())
+    total = cntX + cntY
 
     return (round(cntX * 100 / total, 4), round(cntY * 100 / total, 4))
 
