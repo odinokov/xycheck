@@ -11,7 +11,7 @@ python ycheck.py -b bam_list.txt -g hg38 -t 4 -T .
 | `-g/--genome`       | **required**  | hg19 / hg38                        |
 | `-o/--output`       | <list>.XY.tsv | TSV report path                    |
 | `-t/--threads`      | all cores     | passed to `samtools -@`            |
-| `-k` `-q` `-I` `-E` | 100 60 3 3852 | umap K-mers, MAPQ, FLAG filters    |
+| `-k` `-q` `-f` `-F` | 100 60 3 3852 | umap K-mers, MAPQ, FLAG filters    |
 | `-T`                | \$TMPDIR      | temp dir                           |
 
 **What it does**
@@ -28,7 +28,7 @@ Genome: hg38
 Mappable bp → chrX:142,677,523  chrY:15,440,765
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ counting BAMs 0:00:01
 Report written: bam_list.XY.tsv
-                               chrX/chrY fragment %  (MAPQ≥60, -I 3, -E 3852)
+                               chrX/chrY fragment %  (MAPQ≥60, -f 3, -F 3852)
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━┓
 ┃ BAM                                                                                      ┃    %X ┃    %Y ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━┩
