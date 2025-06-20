@@ -207,18 +207,6 @@ def main(bam_list, output, genome, kmer, mapq,
 
         console.print(f"[green]samtools -@ {threads} | TMP {tmp_dir}[/]")
 
-        # Genome autodetection from first BAM
-        if genome is None:
-            genome = "hg38"  # default fallback
-            with pysam.AlignmentFile(bam_paths[0]) as bf:
-                chroms = [sq['SN'] for sq in bf.header.get('SQ', [])]
-                has_chr = any(c.startswith('chr') for c in chroms)
-                for sq in bf.header.get('SQ', []):
-                    asm_tag = sq.get('AS')
-                    if asm_tag:
-                        genome = {"GRCh37": "hg19", "GRCh38": "hg38",
-                                  "hg19": "hg19", "hg38": "hg38"}.get(asm_tag, genome)
-                        break
         console.print(f"[bold]Genome:[/] {genome}")
 
         # Step 1: Download/build clean track
