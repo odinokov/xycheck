@@ -177,7 +177,7 @@ def pct_xy(bam, bed, mapq, f_inc, f_exc, threads, lenX: int, lenY: int, chromX: 
 @click.command()
 @click.option("-b","--bam-list", required=True, type=click.Path(exists=True, dir_okay=False))
 @click.option("-o","--output", type=click.Path(dir_okay=False))
-@click.option("-g","--genome", type=click.Choice(["hg19","hg38"]))
+@click.option("-g","--genome", required=True, type=click.Choice(["hg19","hg38"]))
 @click.option("-k","--kmer", default=100, show_default=True)
 @click.option("-q","--mapq", default=60, show_default=True)
 @click.option("-f","--include-flag", default=3, show_default=True)
