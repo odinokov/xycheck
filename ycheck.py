@@ -16,29 +16,48 @@
 #   python ycheck.py -b bam_list.txt -g hg38 -t 4
 # -------------------------------------------------------------------------
 
-import os, sys, pathlib, logging, tarfile, gzip, shutil, tempfile, subprocess
-import requests, click, pysam, pybedtools
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
-from rich.table    import Table
-from rich.console  import Console
+import gzip
+import logging
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+import click
+import pybedtools
+import pysam
+import requests
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+from rich.table import Table
 
 UMAP_URL = "https://bismap.hoffmanlab.org/raw/{asm}.umap.tar.gz"
-BL_URL   = "https://raw.githubusercontent.com/Boyle-Lab/Blacklist/master/lists/{asm}-blacklist.v2.bed.gz"
+BL_URL = "https://raw.githubusercontent.com/Boyle-Lab/Blacklist/master/lists/{asm}-blacklist.v2.bed.gz"
 DATA_DIR = pathlib.Path("data")
 
 # ── helpers ────────────────────────────────────────────────────────────────
+
 
 def fetch(url: str, dest: pathlib.Path, prog: Progress) -> pathlib.Path:
     """Download file with resume support and error handling"""
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and dest.stat().st_size:
         return dest
-        
+
     tmp = dest.with_suffix(dest.suffix + ".tmp")
     resume = tmp.stat().st_size if tmp.exists() else 0
     headers = {"Range": f"bytes={resume}-"} if resume else {}
     t = prog.add_task(f"download {dest.name}", total=None)
-    
+
     try:
         with requests.get(url, stream=True, timeout=(5, 120), headers=headers) as r:
             r.raise_for_status()
@@ -57,7 +76,10 @@ def fetch(url: str, dest: pathlib.Path, prog: Progress) -> pathlib.Path:
     finally:
         prog.remove_task(t)
 
-def extract_umap_bed(tar_path: pathlib.Path, k: int, outdir: pathlib.Path) -> pathlib.Path:
+
+def extract_umap_bed(
+    tar_path: pathlib.Path, k: int, outdir: pathlib.Path
+) -> pathlib.Path:
     """Extract kmer-specific BED from Umap tarball"""
     pats = [f"k{k}.umap.bed.gz", f"{k}bp_kmers.bed.gz", f"{k}bp_kmers.bed"]
     with tarfile.open(tar_path) as tar:
@@ -69,41 +91,45 @@ def extract_umap_bed(tar_path: pathlib.Path, k: int, outdir: pathlib.Path) -> pa
                 return dst
     raise RuntimeError(f"k={k} track not found in {tar_path.name}")
 
+
 def gunzip(p: pathlib.Path) -> pathlib.Path:
     """Decompress .gz file if needed"""
     if p.suffix != ".gz":
         return p
-    out = p.with_suffix('')
+    out = p.with_suffix("")
     if not out.exists():
         with gzip.open(p, "rb") as fi, open(out, "wb") as fo:
             shutil.copyfileobj(fi, fo)
     return out
 
+
 def build_clean_track(asm: str, kmer: int, prog: Progress) -> pathlib.Path:
     """Build cleaned chromosome X/Y BED track with kmer in filename"""
     wd = DATA_DIR / asm
     out_path = wd / f"clean_XY.{asm}.k{kmer}.bed"
-    
+
     # Return existing file if valid
     if out_path.exists() and out_path.stat().st_size > 0:
         return out_path
-        
-    umap_tar = fetch(UMAP_URL.format(asm=asm), wd/f"{asm}.umap.tar.gz", prog)
-    bl_gz    = fetch(BL_URL .format(asm=asm), wd/f"{asm}.blacklist.bed.gz", prog)
-    
+
+    umap_tar = fetch(UMAP_URL.format(asm=asm), wd / f"{asm}.umap.tar.gz", prog)
+    bl_gz = fetch(BL_URL.format(asm=asm), wd / f"{asm}.blacklist.bed.gz", prog)
+
     # Process with pybedtools
     umap_bed = gunzip(extract_umap_bed(umap_tar, kmer, wd))
     blacklist = gunzip(bl_gz)
-    
-    merged = (pybedtools
-              .BedTool(umap_bed)
-              .filter(lambda x: x.chrom in ("chrX", "chrY"))
-              .subtract(pybedtools.BedTool(blacklist))
-              .sort()
-              .merge())
+
+    merged = (
+        pybedtools.BedTool(umap_bed)
+        .filter(lambda x: x.chrom in ("chrX", "chrY"))
+        .subtract(pybedtools.BedTool(blacklist))
+        .sort()
+        .merge()
+    )
     merged.saveas(out_path)
     logging.info(f"{out_path.name} created")
     return out_path
+
 
 def calculate_mappable_lengths(bed_path: pathlib.Path) -> tuple:
     """Calculate mappable bp for X/Y without loading entire file"""
@@ -123,36 +149,53 @@ def calculate_mappable_lengths(bed_path: pathlib.Path) -> tuple:
     except Exception as e:
         logging.error(f"Error reading BED: {e}")
         raise
-    
+
     if lenX == 0 or lenY == 0:
         raise ValueError(f"Invalid mappable lengths: chrX={lenX}, chrY={lenY}")
-    
+
     return (lenX, lenY)
 
-def pct_xy(bam, bed, mapq, f_inc, f_exc, threads, lenX: int, lenY: int, chromX: str, chromY: str):
+
+def pct_xy(
+    bam,
+    bed,
+    mapq,
+    f_inc,
+    f_exc,
+    threads,
+    lenX: int,
+    lenY: int,
+    chromX: str,
+    chromY: str,
+):
     """Calculate normalized X/Y percentages with explicit chromosome names"""
     cmd_base = [
-        "samtools", "view", "-c",
-        "-q", str(mapq),
-        "-f", str(f_inc),
-        "-F", str(f_exc),
-        "-@", str(threads),
-        "-L", str(bed),
-        bam
+        "samtools",
+        "view",
+        "-c",
+        "-q",
+        str(mapq),
+        "-f",
+        str(f_inc),
+        "-F",
+        str(f_exc),
+        "-@",
+        str(threads),
+        "-L",
+        str(bed),
+        bam,
     ]
-    
+
     try:
         # Count chromosome X
         resultX = subprocess.run(
-            cmd_base + [chromX],
-            capture_output=True, text=True, check=True
+            cmd_base + [chromX], capture_output=True, text=True, check=True
         )
         cntX = int(resultX.stdout.strip())
-        
+
         # Count chromosome Y
         resultY = subprocess.run(
-            cmd_base + [chromY],
-            capture_output=True, text=True, check=True
+            cmd_base + [chromY], capture_output=True, text=True, check=True
         )
         cntY = int(resultY.stdout.strip())
     except subprocess.CalledProcessError as e:
@@ -173,32 +216,63 @@ def pct_xy(bam, bed, mapq, f_inc, f_exc, threads, lenX: int, lenY: int, chromX: 
     pctY = round(100 - pctX, 2)
     return (pctX, pctY)
 
+
 # ── CLI ────────────────────────────────────────────────────────────────────
 @click.command()
-@click.option("-b","--bam-list", required=True, type=click.Path(exists=True, dir_okay=False))
-@click.option("-o","--output", type=click.Path(dir_okay=False))
-@click.option("-g","--genome", required=True, type=click.Choice(["hg19","hg38"]))
-@click.option("-k","--kmer", default=100, show_default=True, required=True, type=click.Choice(["100","50", "36", "24"]))
-@click.option("-q","--mapq", default=60, show_default=True)
-@click.option("-f","--include-flag", default=3, show_default=True)
-@click.option("-F","--exclude-flag", default=3852, show_default=True)
-@click.option("-t","--threads", default=min(8, os.cpu_count() or 1), show_default=True)
-@click.option("-T","--tmp-dir", default=tempfile.gettempdir(), show_default=True,
-              type=click.Path(file_okay=False, writable=True))
-@click.option("-v","--verbose", is_flag=True)
-
-def main(bam_list, output, genome, kmer, mapq,
-         include_flag, exclude_flag, threads, tmp_dir, verbose):
-
+@click.option(
+    "-b", "--bam-list", required=True, type=click.Path(exists=True, dir_okay=False)
+)
+@click.option("-o", "--output", type=click.Path(dir_okay=False))
+@click.option("-g", "--genome", required=True, type=click.Choice(["hg19", "hg38"]))
+@click.option(
+    "-k",
+    "--kmer",
+    default=100,
+    show_default=True,
+    required=True,
+    type=click.Choice(["100", "50", "36", "24"]),
+)
+@click.option("-q", "--mapq", default=60, show_default=True)
+@click.option("-f", "--include-flag", default=3, show_default=True)
+@click.option("-F", "--exclude-flag", default=3852, show_default=True)
+@click.option("-t", "--threads", default=min(8, os.cpu_count() or 1), show_default=True)
+@click.option(
+    "-T",
+    "--tmp-dir",
+    default=tempfile.gettempdir(),
+    show_default=True,
+    type=click.Path(file_okay=False, writable=True),
+)
+@click.option("-v", "--verbose", is_flag=True)
+def main(
+    bam_list,
+    output,
+    genome,
+    kmer,
+    mapq,
+    include_flag,
+    exclude_flag,
+    threads,
+    tmp_dir,
+    verbose,
+):
     os.environ["TMPDIR"] = tmp_dir
-    import pybedtools.helpers as _h; _h.set_tempdir(tmp_dir)
+    import pybedtools.helpers as _h
 
-    logging.basicConfig(level=logging.INFO if verbose else logging.WARNING,
-                        format="%(levelname)s: %(message)s")
+    _h.set_tempdir(tmp_dir)
+
+    logging.basicConfig(
+        level=logging.INFO if verbose else logging.WARNING,
+        format="%(levelname)s: %(message)s",
+    )
     console = Console()
 
     try:
-        bam_paths = [p.strip() for p in pathlib.Path(bam_list).read_text().splitlines() if p.strip()]
+        bam_paths = [
+            p.strip()
+            for p in pathlib.Path(bam_list).read_text().splitlines()
+            if p.strip()
+        ]
         if not bam_paths:
             sys.exit("BAM list is empty")
 
@@ -210,14 +284,19 @@ def main(bam_list, output, genome, kmer, mapq,
         console.print(f"[bold]Genome:[/] {genome}")
 
         # Step 1: Download/build clean track
-        with Progress(SpinnerColumn(), BarColumn(), TextColumn("{task.description}"),
-                      TimeElapsedColumn(), transient=True) as dl:
+        with Progress(
+            SpinnerColumn(),
+            BarColumn(),
+            TextColumn("{task.description}"),
+            TimeElapsedColumn(),
+            transient=True,
+        ) as dl:
             bed_path = build_clean_track(genome, kmer, dl)
 
         # Step 1b: Detect chromosome naming convention
         with pysam.AlignmentFile(bam_paths[0]) as bf:
-            chroms = [sq['SN'] for sq in bf.header.get('SQ', [])]
-            has_chr = any(c.startswith('chr') for c in chroms)
+            chroms = [sq["SN"] for sq in bf.header.get("SQ", [])]
+            has_chr = any(c.startswith("chr") for c in chroms)
             chromX = "chrX" if has_chr else "X"
             chromY = "chrY" if has_chr else "Y"
 
@@ -227,13 +306,25 @@ def main(bam_list, output, genome, kmer, mapq,
 
         # Step 2: Process BAMs
         results = []
-        with Progress(SpinnerColumn(), BarColumn(), TextColumn("counting BAMs"),
-                      TimeElapsedColumn()) as bar:
+        with Progress(
+            SpinnerColumn(),
+            BarColumn(),
+            TextColumn("counting BAMs"),
+            TimeElapsedColumn(),
+        ) as bar:
             task = bar.add_task("counting BAMs", total=len(bam_paths))
             for bam in bam_paths:
                 x, y = pct_xy(
-                    bam, bed_path, mapq, include_flag, exclude_flag, 
-                    threads, lenX, lenY, chromX, chromY
+                    bam,
+                    bed_path,
+                    mapq,
+                    include_flag,
+                    exclude_flag,
+                    threads,
+                    lenX,
+                    lenY,
+                    chromX,
+                    chromY,
                 )
                 results.append((bam, x, y))
                 bar.update(task, advance=1)
@@ -250,7 +341,9 @@ def main(bam_list, output, genome, kmer, mapq,
         console.print(f"[cyan]Report written:[/] {output}")
 
         # Step 4: Display pretty table
-        tbl = Table(title=f"chrX/chrY fragment %  (MAPQ≥{mapq}, -f {include_flag}, -F {exclude_flag})")
+        tbl = Table(
+            title=f"chrX/chrY fragment %  (MAPQ≥{mapq}, -f {include_flag}, -F {exclude_flag})"
+        )
         tbl.add_column("BAM", overflow="fold")
         tbl.add_column("%X", justify="right")
         tbl.add_column("%Y", justify="right")
@@ -268,6 +361,6 @@ def main(bam_list, output, genome, kmer, mapq,
         # Cleanup temporary files
         pybedtools.helpers.cleanup(remove_all=True)
 
+
 if __name__ == "__main__":
     main()
-    
