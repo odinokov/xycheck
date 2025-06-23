@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ycheck.py  v1.6  (2025-06-20)
+# xycheck.py  v1.6  (2025-06-20)
 #
 # MIT License
 #
