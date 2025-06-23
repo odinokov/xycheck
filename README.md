@@ -21,7 +21,7 @@ python xycheck.py -b bam_list.txt -g hg38 -t 4
 3. For each BAM outputs %X, %Y.
 
 ```txt
-python ycheck.py -b bam_list.lst -g hg38 -t 4
+python xycheck.py -b bam_list.lst -g hg38 -t 4
 samtools -@ 4 | TMP /tmp
 Genome: hg38
 
