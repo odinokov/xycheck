@@ -227,9 +227,8 @@ def pct_xy(
 @click.option(
     "-k",
     "--kmer",
-    default=100,
+    default="100",
     show_default=True,
-    # required=True,
     type=click.Choice(["100", "50", "36", "24"]),
 )
 @click.option("-q", "--mapq", default=60, show_default=True)
