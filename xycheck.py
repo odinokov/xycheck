@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# xycheck.py  v1.6  (2025-06-20)
+# xycheck.py  v1.7  (2025-07-03)
 #
 # MIT License
 #
@@ -304,6 +304,9 @@ def main(
         console.print(f"[blue]Mappable bp → {chromX}:{lenX:,}  {chromY}:{lenY:,}[/]")
 
         # Step 2: Process BAMs
+        if not pysam.index_exists(bam):
+            logging.warning(f"No index found for {bam}, counting may be slow")
+    
         results = []
         with Progress(
             SpinnerColumn(),
