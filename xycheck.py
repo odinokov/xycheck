@@ -121,7 +121,7 @@ def build_clean_track(asm: str, kmer: int, prog: Progress) -> pathlib.Path:
 
     merged = (
         pybedtools.BedTool(umap_bed)
-        .filter(lambda x: x.chrom in ("chrX", "chrY"))
+        .filter(lambda x: x.chrom in ("chrX", "chrY")) # .filter(lambda x: x.chrom in ("chrX", "chrY") and float(x.score) == 0.0)  # Filter for zero mappability
         .subtract(pybedtools.BedTool(blacklist))
         .sort()
         .merge()
