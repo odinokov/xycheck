@@ -28,7 +28,7 @@ python xycheck.py -b sample.bam -g hg38 -t 4
 | `-t/--threads`      | all cores     | passed to `samtools -@`                        |
 | `-k` `-q` `-f` `-F` | 100 60 3 3852 | umap K-mers, MAPQ, FLAG filters                |
 | `-T`                | $TMPDIR       | temp dir for pybedtools scratch                |
-| `-d/--data-dir`     | data          | cache dir for umap/blacklist BEDs              |
+| `-d/--data-dir`     | data          | cache dir, relative to `xycheck.py` unless absolute |
 | `--sex-threshold`   | 20.0          | %Y cut-off: below → Female, at or above → Male |
 | `-v/--verbose`      |               | show download/filter progress                  |
 
@@ -38,7 +38,7 @@ python xycheck.py -b sample.bam -g hg38 -t 4
 2. Builds a uniquely-mappable chrX/chrY BED once (score == 1.0, blacklist subtracted).
 3. Counts properly-paired MAPQ-filtered reads from one BAM/CRAM overlapping that BED on X and Y, adjusts by callable bp, and calls sex.
 
-Run one process per BAM/CRAM for large cohorts. The shared `data/` cache avoids rebuilding the Umap/blacklist BED for every sample.
+Run one process per BAM/CRAM for large cohorts. By default, the shared `data/` cache lives next to `xycheck.py`, so it is reused even when the script is run from another directory.
 
 **Output** — TSV is printed to stdout. Use `-o/--output` to also write it to a file:
 

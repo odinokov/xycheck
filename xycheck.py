@@ -24,6 +24,7 @@ import requests
 
 UMAP_URL = "https://bismap.hoffmanlab.org/raw/{asm}.umap.tar.gz"
 BL_URL   = "https://raw.githubusercontent.com/Boyle-Lab/Blacklist/master/lists/{asm}-blacklist.v2.bed.gz"
+SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 
 
 # ── download / extract helpers ─────────────────────────────────────────────
@@ -218,7 +219,7 @@ def alignment_index_exists(path: pathlib.Path) -> bool:
               help="Temp dir for pybedtools scratch files (set to SLURM $TMPDIR)")
 @click.option("-d", "--data-dir",     default="data", show_default=True,
               type=click.Path(file_okay=False),
-              help="Cache dir for umap/blacklist/clean BED files")
+              help="Cache dir for umap/blacklist/clean BED files. Relative paths are resolved from xycheck.py")
 @click.option("--score-col",          default=None, type=int,
               help="0-based column index of mappability score in umap BED (auto-detected if omitted)")
 @click.option("--sex-threshold",      default=20.0, show_default=True, type=float,
@@ -237,6 +238,8 @@ def main(bam, output, genome, kmer, mapq, include_flag, exclude_flag,
     pybedtools.helpers.set_tempdir(tmp_dir)
 
     data_path = pathlib.Path(data_dir)
+    if not data_path.is_absolute():
+        data_path = SCRIPT_DIR / data_path
 
     try:
         bam_path = pathlib.Path(bam)
