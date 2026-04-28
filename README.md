@@ -47,7 +47,7 @@ sample	pct_chrX	pct_chrY	sex
 sample.sorted.bam	99.91	0.09	Female
 ```
 
-Sex is called `Female` when `%Y < --sex-threshold` (default 20), `Male` otherwise. The 20% default follows SEXCMD, which states: "we set the minimum fraction of Y or W marker hits on a homozygous individual to be 0.2" (Jeong et al., PLOS ONE 2017). Tune `--sex-threshold` if your assay, reference, or filtering strategy shifts the expected XX/XY clusters.
+Sex is called `Female` when `%Y < --sex-threshold` (default 20), `Male` otherwise. Tune `--sex-threshold` if your assay, reference, or filtering strategy shifts the expected XX/XY clusters.
 
 ## Citation
 
