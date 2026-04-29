@@ -35,12 +35,17 @@ def fetch(url: str, dest: pathlib.Path) -> pathlib.Path:
     if dest.exists() and dest.stat().st_size:
         logging.info("cached  %s", dest)
         return dest
+    tmp_dest = dest.with_name(dest.name + ".tmp")
     logging.info("downloading %s", dest.name)
+    if tmp_dest.exists():
+        tmp_dest.unlink()
     with requests.get(url, stream=True, timeout=(10, 300)) as r:
         r.raise_for_status()
-        with open(dest, "wb") as fh:
+        with open(tmp_dest, "wb") as fh:
             for chunk in r.iter_content(1 << 20):
-                fh.write(chunk)
+                if chunk:
+                    fh.write(chunk)
+    tmp_dest.replace(dest)
     return dest
 
 
