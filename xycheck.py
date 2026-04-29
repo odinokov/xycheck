@@ -185,8 +185,12 @@ def pct_xy(bam, bed, mapq, f_inc, f_exc, threads, lenX, lenY, chromX, chromY):
     try:
         cntX = int(subprocess.run(base + [chromX], capture_output=True, text=True, check=True).stdout.strip())
         cntY = int(subprocess.run(base + [chromY], capture_output=True, text=True, check=True).stdout.strip())
-    except (subprocess.CalledProcessError, ValueError) as e:
-        logging.warning("samtools failed for %s: %s", bam, e)
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.strip() if e.stderr else "no stderr"
+        logging.warning("samtools failed for %s: %s; stderr: %s", bam, e, stderr)
+        return None, None
+    except ValueError as e:
+        logging.warning("samtools returned a non-integer count for %s: %s", bam, e)
         return None, None
     if cntX + cntY == 0:
         return None, None
@@ -203,6 +207,17 @@ def alignment_index_exists(path: pathlib.Path) -> bool:
     if path.suffix == ".cram":
         return path.with_suffix(".crai").exists() or path.with_suffix(path.suffix + ".crai").exists()
     return False
+
+
+def detect_sex_chromosomes(chroms):
+    chrom_set = set(chroms)
+    if {"chrX", "chrY"}.issubset(chrom_set):
+        return True, "chrX", "chrY"
+    if {"X", "Y"}.issubset(chrom_set):
+        return False, "X", "Y"
+    raise ValueError(
+        "BAM/CRAM header does not contain chrX/chrY or X/Y contigs"
+    )
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────
@@ -257,9 +272,7 @@ def main(bam, output, genome, kmer, mapq, include_flag, exclude_flag,
         # Detect chr naming from the BAM/CRAM header
         with pysam.AlignmentFile(str(bam_path)) as bf:
             chroms = [sq["SN"] for sq in bf.header.get("SQ", [])]
-        has_chr = any(c.startswith("chr") for c in chroms)
-        chromX  = "chrX" if has_chr else "X"
-        chromY  = "chrY" if has_chr else "Y"
+        has_chr, chromX, chromY = detect_sex_chromosomes(chroms)
 
         # Ensure BED chr names match the BAM convention
         if not has_chr:

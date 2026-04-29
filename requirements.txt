@@ -1,0 +1,4 @@
+click
+pybedtools
+pysam
+requests
