@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-# xycheck.py  v2.0
-#
-# Counts MAPQ-filtered, properly-paired reads on chrX and chrY for one BAM/CRAM.
-# Normalises by mappable bp (Umap k-mer uniqueness minus ENCODE blacklist).
-#
-# Usage:  python xycheck.py -b sample.bam -g hg38 -t 4
-
 import gzip
 import logging
 import os
@@ -25,9 +18,6 @@ import requests
 UMAP_URL = "https://bismap.hoffmanlab.org/raw/{asm}.umap.tar.gz"
 BL_URL   = "https://raw.githubusercontent.com/Boyle-Lab/Blacklist/master/lists/{asm}-blacklist.v2.bed.gz"
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
-
-
-# ── download / extract helpers ─────────────────────────────────────────────
 
 
 def fetch(url: str, dest: pathlib.Path) -> pathlib.Path:
@@ -76,9 +66,6 @@ def gunzip(p: pathlib.Path) -> pathlib.Path:
     return out
 
 
-# ── umap score column detection ────────────────────────────────────────────
-
-
 def detect_score_column(bed_path: pathlib.Path) -> int:
     opener = gzip.open if bed_path.suffix == ".gz" else open
     rows = []
@@ -109,17 +96,9 @@ def detect_score_column(bed_path: pathlib.Path) -> int:
     )
 
 
-# ── BED track construction ─────────────────────────────────────────────────
-
-
 def build_clean_track(
     asm: str, kmer: int, data_dir: pathlib.Path, score_col: int
 ) -> pathlib.Path:
-    """
-    Build chrX/Y uniquely-mappable BED (cached in data_dir).
-    Keeps only intervals where score[score_col] == 1.0 (fully unique k-mers),
-    then subtracts the ENCODE blacklist.
-    """
     wd = data_dir / asm
     out = wd / f"clean_XY.{asm}.k{kmer}.bed"
     if out.exists() and out.stat().st_size:
@@ -153,9 +132,6 @@ def build_clean_track(
     )
     logging.info("clean BED written: %s", out)
     return out
-
-
-# ── mappable length + BAM counting ─────────────────────────────────────────
 
 
 def mappable_lengths(bed_path: pathlib.Path):
@@ -220,9 +196,6 @@ def detect_sex_chromosomes(chroms):
     )
 
 
-# ── CLI ────────────────────────────────────────────────────────────────────
-
-
 @click.command()
 @click.option("-b", "--bam",          required=True, type=click.Path(exists=True, dir_okay=False),
               help="Input BAM/CRAM file")
@@ -253,7 +226,6 @@ def main(bam, output, genome, kmer, mapq, include_flag, exclude_flag,
         format="%(levelname)s: %(message)s",
     )
 
-    # Route pybedtools temp files to user-defined tmp_dir
     os.environ["TMPDIR"] = tmp_dir
     pybedtools.helpers.set_tempdir(tmp_dir)
 
@@ -269,12 +241,10 @@ def main(bam, output, genome, kmer, mapq, include_flag, exclude_flag,
         if not alignment_index_exists(bam_path):
             logging.warning("No index found for %s; samtools may fail or run slowly", bam_path)
 
-        # Detect chr naming from the BAM/CRAM header
         with pysam.AlignmentFile(str(bam_path)) as bf:
             chroms = [sq["SN"] for sq in bf.header.get("SQ", [])]
         has_chr, chromX, chromY = detect_sex_chromosomes(chroms)
 
-        # Ensure BED chr names match the BAM convention
         if not has_chr:
             bed_nochr = bed_path.with_suffix(".nochr.bed")
             if not bed_nochr.exists():
@@ -288,8 +258,6 @@ def main(bam, output, genome, kmer, mapq, include_flag, exclude_flag,
         logging.info("mappable bp: %s=%d  %s=%d", chromX, lenX, chromY, lenY)
 
         header = "sample\tpct_chrX\tpct_chrY\tsex"
-        print(header)
-        rows = [header + "\n"]
         x, y = pct_xy(str(bam_path), bed_path, mapq, include_flag, exclude_flag,
                       threads, lenX, lenY, chromX, chromY)
         sample = bam_path.name
@@ -298,12 +266,11 @@ def main(bam, output, genome, kmer, mapq, include_flag, exclude_flag,
         else:
             sex = "Female" if y < sex_threshold else "Male"
             line = f"{sample}\t{x:.2f}\t{y:.2f}\t{sex}"
+        print(header)
         print(line)
-        rows.append(line + "\n")
-
         if output:
             with open(output, "w") as fh:
-                fh.writelines(rows)
+                fh.write(f"{header}\n{line}\n")
 
     except Exception as e:
         logging.error("%s", e)
