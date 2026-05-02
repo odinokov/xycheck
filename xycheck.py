@@ -203,7 +203,7 @@ def detect_sex_chromosomes(chroms):
 @click.option("-g", "--genome",       required=True, type=click.Choice(["hg19", "hg38"]))
 @click.option("-k", "--kmer",         default="100", show_default=True,
               type=click.Choice(["100", "50", "36", "24"]))
-@click.option("-q", "--mapq",         default=60,   show_default=True)
+@click.option("-q", "--mapq",         default=30,   show_default=True)
 @click.option("-f", "--include-flag", default=3,    show_default=True)
 @click.option("-F", "--exclude-flag", default=3852, show_default=True)
 @click.option("-t", "--threads",      default=min(8, os.cpu_count() or 1), show_default=True)

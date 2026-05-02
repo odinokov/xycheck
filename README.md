@@ -26,7 +26,7 @@ python xycheck.py -b sample.bam -g hg38 -t 4
 | `-g/--genome`       | **required**  | hg19 / hg38                                    |
 | `-o/--output`       | stdout        | optional TSV report path                       |
 | `-t/--threads`      | all cores     | passed to `samtools -@`                        |
-| `-k` `-q` `-f` `-F` | 100 60 3 3852 | umap K-mers, MAPQ, FLAG filters                |
+| `-k` `-q` `-f` `-F` | 100 30 3 3852 | umap K-mers, MAPQ, FLAG filters                |
 | `-T`                | $TMPDIR       | temp dir for pybedtools scratch                |
 | `-d/--data-dir`     | data          | cache dir, relative to `xycheck.py` unless absolute |
 | `--sex-threshold`   | 20.0          | %Y cut-off: below → Female, at or above → Male |
