@@ -20,28 +20,39 @@ BL_URL   = "https://raw.githubusercontent.com/Boyle-Lab/Blacklist/master/lists/{
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 
 
+def _write_stream(response, dest: pathlib.Path) -> None:
+    tmp = dest.with_name(dest.name + ".tmp")
+    if tmp.exists():
+        tmp.unlink()
+    with open(tmp, "wb") as fh:
+        for chunk in response.iter_content(1 << 20):
+            if chunk:
+                fh.write(chunk)
+    tmp.replace(dest)
+
+
 def fetch(url: str, dest: pathlib.Path) -> pathlib.Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and dest.stat().st_size:
         logging.info("cached  %s", dest)
         return dest
-    tmp_dest = dest.with_name(dest.name + ".tmp")
     logging.info("downloading %s", dest.name)
-    if tmp_dest.exists():
-        tmp_dest.unlink()
     with requests.get(url, stream=True, timeout=(10, 300)) as r:
         r.raise_for_status()
-        with open(tmp_dest, "wb") as fh:
-            for chunk in r.iter_content(1 << 20):
-                if chunk:
-                    fh.write(chunk)
-    tmp_dest.replace(dest)
+        _write_stream(r, dest)
     return dest
+
+
+def _extract_member(tar, member, outdir: pathlib.Path) -> pathlib.Path:
+    dst = outdir / pathlib.Path(member.name).name
+    if not dst.exists():
+        with tar.extractfile(member) as src, open(dst, "wb") as out:
+            shutil.copyfileobj(src, out)
+    return dst
 
 
 def extract_umap_bed(tar_path: pathlib.Path, k: int, outdir: pathlib.Path) -> pathlib.Path:
     pats = [f"k{k}.umap.bed.gz", f"{k}bp_kmers.bed.gz", f"{k}bp_kmers.bed"]
-    # Return cached extraction without opening the (potentially incomplete) tarball
     for pat in pats:
         dst = outdir / pat
         if dst.exists() and dst.stat().st_size:
@@ -50,11 +61,7 @@ def extract_umap_bed(tar_path: pathlib.Path, k: int, outdir: pathlib.Path) -> pa
     with tarfile.open(tar_path) as tar:
         for m in tar.getmembers():
             if any(m.name.endswith(p) for p in pats):
-                dst = outdir / pathlib.Path(m.name).name
-                if not dst.exists():
-                    with tar.extractfile(m) as src, open(dst, "wb") as out:
-                        shutil.copyfileobj(src, out)
-                return dst
+                return _extract_member(tar, m, outdir)
     raise RuntimeError(f"k={k} track not found in {tar_path.name}")
 
 
@@ -66,21 +73,24 @@ def gunzip(p: pathlib.Path) -> pathlib.Path:
     return out
 
 
-def detect_score_column(bed_path: pathlib.Path) -> int:
+def _sample_bed_rows(bed_path: pathlib.Path, n: int = 10) -> list:
     opener = gzip.open if bed_path.suffix == ".gz" else open
     rows = []
     with opener(bed_path, "rt") as fh:
         for line in fh:
             line = line.strip()
-            if not line or line.startswith("#") or line.startswith("track") or line.startswith("browser"):
+            if not line or line.startswith(("#", "track", "browser")):
                 continue
             rows.append(line.split())
-            if len(rows) >= 10:
+            if len(rows) >= n:
                 break
+    return rows
 
+
+def detect_score_column(bed_path: pathlib.Path) -> int:
+    rows = _sample_bed_rows(bed_path)
     if not rows:
         raise RuntimeError(f"No data in {bed_path}")
-
     for col in range(3, len(rows[0])):
         try:
             vals = [float(row[col]) for row in rows if len(row) > col]
@@ -89,7 +99,6 @@ def detect_score_column(bed_path: pathlib.Path) -> int:
                 return col
         except ValueError:
             continue
-
     raise RuntimeError(
         f"No [0,1]-float column found in {bed_path}. "
         "Pass --score-col to specify it manually."
@@ -134,19 +143,24 @@ def build_clean_track(
     return out
 
 
+def _chrom_length(parts: list) -> tuple:
+    if len(parts) < 3:
+        return 0, 0
+    n = int(parts[2]) - int(parts[1])
+    if parts[0] in ("chrX", "X"):
+        return n, 0
+    if parts[0] in ("chrY", "Y"):
+        return 0, n
+    return 0, 0
+
+
 def mappable_lengths(bed_path: pathlib.Path):
     lenX = lenY = 0
     with open(bed_path) as fh:
         for line in fh:
-            parts = line.split()
-            if len(parts) < 3:
-                continue
-            n = int(parts[2]) - int(parts[1])
-            chrom = parts[0]
-            if chrom in ("chrX", "X"):
-                lenX += n
-            elif chrom in ("chrY", "Y"):
-                lenY += n
+            dx, dy = _chrom_length(line.split())
+            lenX += dx
+            lenY += dy
     if not lenX or not lenY:
         raise ValueError(f"Zero mappable bp: chrX={lenX} chrY={lenY}")
     return lenX, lenY
@@ -196,6 +210,20 @@ def detect_sex_chromosomes(chroms):
     )
 
 
+def _strip_chr_from_bed(bed_path: pathlib.Path) -> pathlib.Path:
+    bed_nochr = bed_path.with_suffix(".nochr.bed")
+    if not bed_nochr.exists():
+        logging.info("stripping chr prefix from BED to match BAM")
+        with open(bed_path) as fi, open(bed_nochr, "w") as fo:
+            for line in fi:
+                fo.write(line.replace("chrX", "X").replace("chrY", "Y"))
+    return bed_nochr
+
+
+def _resolve_bed_path(bed_path: pathlib.Path, has_chr: bool) -> pathlib.Path:
+    return bed_path if has_chr else _strip_chr_from_bed(bed_path)
+
+
 @click.command()
 @click.option("-b", "--bam",          required=True, type=click.Path(exists=True, dir_okay=False),
               help="Input BAM/CRAM file")
@@ -235,7 +263,6 @@ def main(bam, output, genome, kmer, mapq, include_flag, exclude_flag,
 
     try:
         bam_path = pathlib.Path(bam)
-
         bed_path = build_clean_track(genome, int(kmer), data_path, score_col)
 
         if not alignment_index_exists(bam_path):
@@ -245,15 +272,7 @@ def main(bam, output, genome, kmer, mapq, include_flag, exclude_flag,
             chroms = [sq["SN"] for sq in bf.header.get("SQ", [])]
         has_chr, chromX, chromY = detect_sex_chromosomes(chroms)
 
-        if not has_chr:
-            bed_nochr = bed_path.with_suffix(".nochr.bed")
-            if not bed_nochr.exists():
-                logging.info("stripping chr prefix from BED to match BAM")
-                with open(bed_path) as fi, open(bed_nochr, "w") as fo:
-                    for line in fi:
-                        fo.write(line.replace("chrX", "X").replace("chrY", "Y"))
-            bed_path = bed_nochr
-
+        bed_path = _resolve_bed_path(bed_path, has_chr)
         lenX, lenY = mappable_lengths(bed_path)
         logging.info("mappable bp: %s=%d  %s=%d", chromX, lenX, chromY, lenY)
 
