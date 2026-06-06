@@ -66,8 +66,10 @@ def extract_umap_bed(tar_path: pathlib.Path, k: int, outdir: pathlib.Path) -> pa
 
 
 def gunzip(p: pathlib.Path) -> pathlib.Path:
-    out = p.with_suffix("") if p.suffix == ".gz" else p
-    if p.suffix == ".gz" and not out.exists():
+    if p.suffix != ".gz":
+        return p
+    out = p.with_suffix("")
+    if not out.exists():
         with gzip.open(p, "rb") as fi, open(out, "wb") as fo:
             shutil.copyfileobj(fi, fo)
     return out
@@ -220,10 +222,6 @@ def _strip_chr_from_bed(bed_path: pathlib.Path) -> pathlib.Path:
     return bed_nochr
 
 
-def _resolve_bed_path(bed_path: pathlib.Path, has_chr: bool) -> pathlib.Path:
-    return bed_path if has_chr else _strip_chr_from_bed(bed_path)
-
-
 @click.command()
 @click.option("-b", "--bam",          required=True, type=click.Path(exists=True, dir_okay=False),
               help="Input BAM/CRAM file")
@@ -272,7 +270,8 @@ def main(bam, output, genome, kmer, mapq, include_flag, exclude_flag,
             chroms = [sq["SN"] for sq in bf.header.get("SQ", [])]
         has_chr, chromX, chromY = detect_sex_chromosomes(chroms)
 
-        bed_path = _resolve_bed_path(bed_path, has_chr)
+        if not has_chr:
+            bed_path = _strip_chr_from_bed(bed_path)
         lenX, lenY = mappable_lengths(bed_path)
         logging.info("mappable bp: %s=%d  %s=%d", chromX, lenX, chromY, lenY)
 
