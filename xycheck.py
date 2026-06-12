@@ -4,13 +4,13 @@
 Pass the clean chrX/chrY BED built by prepare_bed.py via --bed. This script only
 reads that BED and the alignment file; it does not touch the network.
 """
+import argparse
 import logging
 import os
 import pathlib
 import subprocess
 import sys
 
-import click
 import pysam
 
 
@@ -91,30 +91,44 @@ def _strip_chr_from_bed(bed_path: pathlib.Path) -> pathlib.Path:
     return bed_nochr
 
 
-@click.command()
-@click.option("-b", "--bam",          required=True, type=click.Path(exists=True, dir_okay=False),
-              help="Input BAM/CRAM file")
-@click.option("-B", "--bed",          required=True, type=click.Path(exists=True, dir_okay=False),
-              help="Premade clean chrX/chrY BED (built by prepare_bed.py)")
-@click.option("-o", "--output",       type=click.Path(dir_okay=False))
-@click.option("-q", "--mapq",         default=30,   show_default=True)
-@click.option("-f", "--include-flag", default=3,    show_default=True)
-@click.option("-F", "--exclude-flag", default=3852, show_default=True)
-@click.option("-t", "--threads",      default=min(8, os.cpu_count() or 1), show_default=True)
-@click.option("--sex-threshold",      default=20.0, show_default=True, type=float,
-              help="%Y cut-off: samples below are called Female, at or above are called Male")
-@click.option("-v", "--verbose",      is_flag=True)
-def main(bam, bed, output, mapq, include_flag, exclude_flag,
-         threads, sex_threshold, verbose):
+def main():
+    p = argparse.ArgumentParser(
+        description="Count chrX/chrY fragments in a BAM/CRAM against a premade clean BED."
+    )
+    p.add_argument("-b", "--bam",          required=True, metavar="FILE",
+                   help="Input BAM/CRAM file")
+    p.add_argument("-B", "--bed",          required=True, metavar="FILE",
+                   help="Premade clean chrX/chrY BED (built by prepare_bed.py)")
+    p.add_argument("-o", "--output",       metavar="FILE",
+                   help="Optional TSV output path (always printed to stdout)")
+    p.add_argument("-q", "--mapq",         type=int, default=30, metavar="INT",
+                   help="Minimum MAPQ (default: 30)")
+    p.add_argument("-f", "--include-flag", type=int, default=3, metavar="INT",
+                   help="samtools -f flag (default: 3)")
+    p.add_argument("-F", "--exclude-flag", type=int, default=3852, metavar="INT",
+                   help="samtools -F flag (default: 3852)")
+    p.add_argument("-t", "--threads",      type=int,
+                   default=min(8, os.cpu_count() or 1), metavar="INT",
+                   help="samtools threads (default: min(8, nproc))")
+    p.add_argument("--sex-threshold",      type=float, default=20.0, metavar="FLOAT",
+                   help="%%Y cut-off: below → Female, at or above → Male (default: 20.0)")
+    p.add_argument("-v", "--verbose",      action="store_true",
+                   help="Show progress messages")
+    args = p.parse_args()
 
     logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.WARNING,
+        level=logging.DEBUG if args.verbose else logging.WARNING,
         format="%(levelname)s: %(message)s",
     )
 
     try:
-        bam_path = pathlib.Path(bam)
-        bed_path = pathlib.Path(bed)
+        bam_path = pathlib.Path(args.bam)
+        bed_path = pathlib.Path(args.bed)
+
+        if not bam_path.exists():
+            raise FileNotFoundError(f"BAM/CRAM not found: {bam_path}")
+        if not bed_path.exists():
+            raise FileNotFoundError(f"BED not found: {bed_path}")
 
         if not alignment_index_exists(bam_path):
             logging.warning("No index found for %s; samtools may fail or run slowly", bam_path)
@@ -129,18 +143,18 @@ def main(bam, bed, output, mapq, include_flag, exclude_flag,
         logging.info("mappable bp: %s=%d  %s=%d", chromX, lenX, chromY, lenY)
 
         header = "sample\tpct_chrX\tpct_chrY\tsex"
-        x, y = pct_xy(str(bam_path), bed_path, mapq, include_flag, exclude_flag,
-                      threads, lenX, lenY, chromX, chromY)
+        x, y = pct_xy(str(bam_path), bed_path, args.mapq, args.include_flag, args.exclude_flag,
+                      args.threads, lenX, lenY, chromX, chromY)
         sample = bam_path.name
         if x is None:
             line = f"{sample}\tNA\tNA\tNA"
         else:
-            sex = "Female" if y < sex_threshold else "Male"
+            sex = "Female" if y < args.sex_threshold else "Male"
             line = f"{sample}\t{x:.2f}\t{y:.2f}\t{sex}"
         print(header)
         print(line)
-        if output:
-            with open(output, "w") as fh:
+        if args.output:
+            with open(args.output, "w") as fh:
                 fh.write(f"{header}\n{line}\n")
 
     except Exception as e:

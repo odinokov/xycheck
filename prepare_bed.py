@@ -14,7 +14,7 @@ import sys
 import tarfile
 import tempfile
 
-import click
+import argparse
 import pybedtools
 import pybedtools.helpers
 import requests
@@ -149,34 +149,39 @@ def build_clean_track(
     return out
 
 
-@click.command()
-@click.option("-g", "--genome",   required=True, type=click.Choice(["hg19", "hg38"]))
-@click.option("-k", "--kmer",     default="100", show_default=True,
-              type=click.Choice(["100", "50", "36", "24"]))
-@click.option("-d", "--data-dir", default="data", show_default=True,
-              type=click.Path(file_okay=False),
-              help="Cache dir for umap/blacklist/clean BED files. Relative paths are resolved from prepare_bed.py")
-@click.option("-T", "--tmp-dir",  default=tempfile.gettempdir(), show_default=True,
-              type=click.Path(file_okay=False, writable=True),
-              help="Temp dir for pybedtools scratch files (set to SLURM $TMPDIR)")
-@click.option("--score-col",      default=None, type=int,
-              help="0-based column index of mappability score in umap BED (auto-detected if omitted)")
-@click.option("-v", "--verbose",  is_flag=True)
-def main(genome, kmer, data_dir, tmp_dir, score_col, verbose):
+def main():
+    p = argparse.ArgumentParser(
+        description="Fetch Umap + ENCODE blacklist and build a clean chrX/chrY BED."
+    )
+    p.add_argument("-g", "--genome",    required=True, choices=["hg19", "hg38"],
+                   help="Reference genome")
+    p.add_argument("-k", "--kmer",      default="100", choices=["100", "50", "36", "24"],
+                   metavar="{100,50,36,24}",
+                   help="Umap K-mer track (default: 100)")
+    p.add_argument("-d", "--data-dir",  default="data", metavar="DIR",
+                   help="Cache dir for downloaded/built files. Relative paths are resolved from prepare_bed.py (default: data)")
+    p.add_argument("-T", "--tmp-dir",   default=tempfile.gettempdir(), metavar="DIR",
+                   help="Temp dir for pybedtools scratch files (default: $TMPDIR)")
+    p.add_argument("--score-col",       type=int, default=None, metavar="INT",
+                   help="0-based mappability score column in umap BED (auto-detected if omitted)")
+    p.add_argument("-v", "--verbose",   action="store_true",
+                   help="Show download/filter progress")
+    args = p.parse_args()
+
     logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
+        level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(levelname)s: %(message)s",
     )
 
-    os.environ["TMPDIR"] = tmp_dir
-    pybedtools.helpers.set_tempdir(tmp_dir)
+    os.environ["TMPDIR"] = args.tmp_dir
+    pybedtools.helpers.set_tempdir(args.tmp_dir)
 
-    data_path = pathlib.Path(data_dir)
+    data_path = pathlib.Path(args.data_dir)
     if not data_path.is_absolute():
         data_path = SCRIPT_DIR / data_path
 
     try:
-        bed_path = build_clean_track(genome, int(kmer), data_path, score_col)
+        bed_path = build_clean_track(args.genome, int(args.kmer), data_path, args.score_col)
         print(bed_path)
     except Exception as e:
         logging.error("%s", e)

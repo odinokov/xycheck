@@ -4,14 +4,16 @@ Counts chrX / chrY fragments in one BAM/CRAM file, adjusts counts by the callabl
 
 ## Install
 
-Dependencies:
-
-- Python 3 with `click`, `requests`, `pysam`, `pybedtools`
+**`xycheck.py`** (run step):
+- Python 3 with `pysam`
 - `samtools`
+
+**`prepare_bed.py`** (one-time BED build):
+- additionally `requests`, `pybedtools`
 - `bedtools` available to `pybedtools`
 
 ```bash
-pip install click requests pysam pybedtools
+pip install pysam requests pybedtools
 ```
 
 ## Usage
@@ -51,7 +53,7 @@ python xycheck.py -b sample.bam -B data/hg38/clean_XY.hg38.k100.bed -t 4
 | `-b/--bam`        | **required**  | input BAM/CRAM file                            |
 | `-B/--bed`        | **required**  | premade clean chrX/chrY BED from `prepare_bed.py` |
 | `-o/--output`     | stdout        | optional TSV report path                       |
-| `-t/--threads`    | all cores     | passed to `samtools -@`                        |
+| `-t/--threads`    | min(8, nproc) | passed to `samtools -@`                        |
 | `-q` `-f` `-F`    | 30 3 3852     | MAPQ, FLAG filters                             |
 | `--sex-threshold` | 20.0          | %Y cut-off: below → Female, at or above → Male |
 | `-v/--verbose`    |               | show progress                                  |
