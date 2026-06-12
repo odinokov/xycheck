@@ -16,29 +16,52 @@ pip install click requests pysam pybedtools
 
 ## Usage
 
+The workflow is two steps: build the clean BED once per genome with
+`prepare_bed.py`, then run `xycheck.py` per BAM/CRAM. The repo ships premade
+clean BEDs for **hg19** and **hg38** under `data/`, so step 1 is only needed for
+a different genome, k-mer, or to rebuild.
+
+### 1. Prepare the clean BED (network step, once per genome)
+
 ```
-python xycheck.py -b sample.bam -g hg38 -t 4
+python prepare_bed.py -g hg38
 ```
 
-| flag                | default       | note                                           |
-| ------------------- | ------------- | ---------------------------------------------- |
-| `-b/--bam`          | **required**  | input BAM/CRAM file                            |
-| `-g/--genome`       | **required**  | hg19 / hg38                                    |
-| `-o/--output`       | stdout        | optional TSV report path                       |
-| `-t/--threads`      | all cores     | passed to `samtools -@`                        |
-| `-k` `-q` `-f` `-F` | 100 30 3 3852 | umap K-mers, MAPQ, FLAG filters                |
-| `-T`                | $TMPDIR       | temp dir for pybedtools scratch                |
-| `-d/--data-dir`     | data          | cache dir, relative to `xycheck.py` unless absolute |
-| `--sex-threshold`   | 20.0          | %Y cut-off: below → Female, at or above → Male |
-| `-v/--verbose`      |               | show download/filter progress                  |
+This downloads and caches Umap mappability + the ENCODE blacklist under
+`data/<genome>/`, then builds a uniquely-mappable chrX/chrY BED (score == 1.0,
+blacklist subtracted) named `clean_XY.<genome>.k<kmer>.bed`.
 
-**What it does**
+| flag              | default       | note                                                       |
+| ----------------- | ------------- | ---------------------------------------------------------- |
+| `-g/--genome`     | **required**  | hg19 / hg38                                                |
+| `-k/--kmer`       | 100           | umap K-mer track (100 / 50 / 36 / 24)                      |
+| `-d/--data-dir`   | data          | cache dir, relative to `prepare_bed.py` unless absolute    |
+| `-T/--tmp-dir`    | $TMPDIR       | temp dir for pybedtools scratch                            |
+| `--score-col`     | auto          | 0-based mappability score column in the umap BED           |
+| `-v/--verbose`    |               | show download/filter progress                              |
 
-1. Downloads and caches Umap mappability + ENCODE blacklist under `data/`.
-2. Builds a uniquely-mappable chrX/chrY BED once (score == 1.0, blacklist subtracted).
-3. Counts properly-paired MAPQ-filtered reads from one BAM/CRAM overlapping that BED on X and Y, adjusts by callable bp, and calls sex.
+### 2. Run the check (offline, per sample)
 
-Run one process per BAM/CRAM for large cohorts. By default, the shared `data/` cache lives next to `xycheck.py`, so it is reused even when the script is run from another directory.
+```
+python xycheck.py -b sample.bam -B data/hg38/clean_XY.hg38.k100.bed -t 4
+```
+
+| flag              | default       | note                                           |
+| ----------------- | ------------- | ---------------------------------------------- |
+| `-b/--bam`        | **required**  | input BAM/CRAM file                            |
+| `-B/--bed`        | **required**  | premade clean chrX/chrY BED from `prepare_bed.py` |
+| `-o/--output`     | stdout        | optional TSV report path                       |
+| `-t/--threads`    | all cores     | passed to `samtools -@`                        |
+| `-q` `-f` `-F`    | 30 3 3852     | MAPQ, FLAG filters                             |
+| `--sex-threshold` | 20.0          | %Y cut-off: below → Female, at or above → Male |
+| `-v/--verbose`    |               | show progress                                  |
+
+`xycheck.py` counts properly-paired MAPQ-filtered reads from one BAM/CRAM
+overlapping the given clean BED on X and Y, adjusts by callable bp, and calls
+sex. It does not touch the network. If the alignment uses `X`/`Y` contigs
+(no `chr` prefix) the BED is stripped to match, writing a `.nochr.bed` alongside.
+
+Run one `xycheck.py` process per BAM/CRAM for large cohorts.
 
 **Output** — TSV is printed to stdout. Use `-o/--output` to also write it to a file:
 
