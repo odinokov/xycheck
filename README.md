@@ -1,6 +1,24 @@
 # xycheck
 
-Counts chrX / chrY fragments in one BAM/CRAM file, adjusts counts by the callable X/Y territory, and reports the relative X/Y percentage with an inferred sex call.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.7+](https://img.shields.io/badge/python-3.7%2B-blue.svg)](https://www.python.org/)
+[![samtools](https://img.shields.io/badge/requires-samtools-green.svg)](https://www.htslib.org/)
+
+Counts chrX / chrY reads in one BAM/CRAM file, normalises by the uniquely-mappable X/Y territory, and reports the relative X/Y percentage with an inferred sex call. Useful as a quick sample-identity / sex-mismatch check for WGS, WES and cfDNA libraries.
+
+## Quick start
+
+```bash
+pip install pysam                 # plus samtools on PATH
+python xycheck.py -b sample.bam -B data/hg38/clean_XY.hg38.k100.bed
+```
+
+```
+sample	pct_chrX	pct_chrY	sex
+sample.bam	99.91	0.09	Female
+```
+
+Premade BEDs for hg19 and hg38 ship in `data/`, so no download is needed for the common case.
 
 ## Install
 
@@ -13,8 +31,11 @@ Counts chrX / chrY fragments in one BAM/CRAM file, adjusts counts by the callabl
 - `bedtools` available to `pybedtools`
 
 ```bash
-pip install pysam requests pybedtools
+pip install -r requirements.txt          # pysam requests pybedtools
+conda install -c bioconda samtools bedtools
 ```
+
+Python 3.7+ (uses `subprocess.run(capture_output=...)`).
 
 ## Usage
 
@@ -29,9 +50,10 @@ a different genome, k-mer, or to rebuild.
 python prepare_bed.py -g hg38
 ```
 
-This downloads and caches Umap mappability + the ENCODE blacklist under
-`data/<genome>/`, then builds a uniquely-mappable chrX/chrY BED (score == 1.0,
-blacklist subtracted) named `clean_XY.<genome>.k<kmer>.bed`.
+This downloads and caches Umap mappability (several hundred MB per genome) +
+the ENCODE blacklist under `data/<genome>/`, then builds a uniquely-mappable
+chrX/chrY BED (score == 1.0, blacklist subtracted) named
+`clean_XY.<genome>.k<kmer>.bed`.
 
 | flag              | default       | note                                                       |
 | ----------------- | ------------- | ---------------------------------------------------------- |
@@ -59,22 +81,40 @@ python xycheck.py -b sample.bam -B data/hg38/clean_XY.hg38.k100.bed -t 4
 | `-v/--verbose`    |               | show progress                                  |
 
 `xycheck.py` counts properly-paired MAPQ-filtered reads from one BAM/CRAM
-overlapping the given clean BED on X and Y, adjusts by callable bp, and calls
-sex. It does not touch the network. If the alignment uses `X`/`Y` contigs
-(no `chr` prefix) the BED is stripped to match, writing a `.nochr.bed` alongside.
-
-Run one `xycheck.py` process per BAM/CRAM for large cohorts.
-
-**Output** — TSV is printed to stdout. Use `-o/--output` to also write it to a file:
+overlapping the given clean BED on X and Y, normalises each count by the
+mappable bp of its chromosome, and reports the share of X vs Y:
 
 ```
-sample	pct_chrX	pct_chrY	sex
-sample.sorted.bam	99.91	0.09	Female
+pct_chrX = 100 * (nX / lenX) / (nX / lenX + nY / lenY)
+pct_chrY = 100 - pct_chrX
 ```
 
+It does not touch the network. If the alignment uses `X`/`Y` contigs (no
+`chr` prefix) the BED is stripped to match, writing a `.nochr.bed` alongside.
+
+Requirements and caveats:
+
+- The BAM/CRAM must be indexed (`.bai` / `.crai`); `samtools view -L` needs it.
+- The default `-f 3` keeps only properly-paired reads, so single-end data
+  yields zero counts. Use `-f 0` for single-end libraries.
+- If samtools fails or no reads pass the filters, the row is
+  `sample	NA	NA	NA` and the exit code is 0; on a missing file or unknown
+  contigs the script exits 1.
+
+Run one `xycheck.py` process per BAM/CRAM for large cohorts, e.g.
+
+```bash
+for b in *.bam; do python xycheck.py -b "$b" -B data/hg38/clean_XY.hg38.k100.bed -o "${b%.bam}.XY.tsv"; done
+```
+
+**Output** — TSV is printed to stdout. Use `-o/--output` to also write it to a file.
 Sex is called `Female` when `%Y < --sex-threshold` (default 20), `Male` otherwise. Tune `--sex-threshold` if your assay, reference, or filtering strategy shifts the expected XX/XY clusters.
 
-## Citation
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## References
 
  - Jeong S, Kim J, Park W, Jeon H, Kim N. SEXCMD: Development and validation of sex marker sequences for whole-exome/genome and RNA sequencing. PLOS ONE 12(9): e0184087 (2017). https://doi.org/10.1371/journal.pone.0184087
  - Amemiya, H.M., Kundaje, A. & Boyle, A.P. The ENCODE Blacklist: Identification of Problematic Regions of the Genome. Sci Rep 9, 9354 (2019). https://doi.org/10.1038/s41598-019-45839-z
